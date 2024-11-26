@@ -30,7 +30,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.2"
+    plugin_version = "2.3"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -241,7 +241,8 @@ class WeWorkIP(_PluginBase):
 
     def ChangeIP(self):
         logger.info("开始请求企业微信管理更改可信IP")
-        # 解析 Cookie 字符串为字典
+        if not self.check_connect():
+            logger.error("网络连接失败,跳过本次缓存保活")
         options = webdriver.EdgeOptions()
         options.add_argument("--headless=old")
         driver = webdriver.Edge(options=options)
@@ -305,6 +306,9 @@ class WeWorkIP(_PluginBase):
 
     def refresh_cookie(self):
         logger.info("开始刷新企业微信缓存")
+        if not self.check_connect():
+            logger.error("网络连接失败,跳过本次缓存保活")
+            return
         try:
             options = webdriver.EdgeOptions()
             options.add_argument("--headless=old")
@@ -471,6 +475,17 @@ class WeWorkIP(_PluginBase):
                 logger.error(f"定时唤起企业登录任务配置错误：{err}")
                 self.systemmessage.put(f"定时唤起企业登录配置错误：{err}")
                 
+    def check_connect(self):
+        try:
+            response = requests.get(self._urls[0], timeout=10)
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+        except requests.exceptions.RequestException as e:
+            logger.error(f"连接失败: {e}")
+            return False
+
     def __update_config(self):
         """
         更新配置
