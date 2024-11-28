@@ -1,4 +1,5 @@
-自动设置动态IP到企业微信应用可信IP
+自动设置动态IP到企业微信应用可信IP  
+[手动提取cookie流程](#手动获取cookie流程)
 
 2.0版本内置登录流程:  
 
@@ -15,6 +16,7 @@
 
 默认使用MP官方CookieCloud同步登录cookie，配置好官方的CC就能自动导入cookie 以下是手动获取流程  
 
+## 手动获取cookie流程
 使用浏览器cookie插件(([Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm))导出HeaderString格式的cookie,
 登录企业微信后按下图所示导出cookie
 如果只使用手动抓取填写的cookie,后续如果用浏览器扫码登录企业微信,则上次抓取的cookie会失效,需重新抓取
