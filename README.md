@@ -20,8 +20,8 @@ Windows用户推荐使用普通版
 ![image](https://github.com/user-attachments/assets/a9638858-fac8-441b-920f-4b8255bedfdc)  
 ## 手动获取cookie流程
 使用浏览器cookie插件(([Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm))导出HeaderString格式的cookie,
-登录企业微信后按下图所示导出cookie
-如果只使用手动抓取填写的cookie,后续如果用浏览器扫码登录企业微信,则上次抓取的cookie会失效,需重新抓取  
+登录企业微信后按下图所示导出cookie  
+如果只使用手动抓取填写的cookie，后续如果用浏览器扫码登录企业微信，则上次抓取的cookie会失效，需重新抓取  
 ![微信截图_20240605203353](https://github.com/suraxiuxiu/MoviePilot-Plugins/assets/41566282/6f107697-5e96-4cef-821e-bb3df5b6e7a9)
 
 ## 多WAN、多公网IP环境答疑
