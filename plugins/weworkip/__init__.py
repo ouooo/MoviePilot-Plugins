@@ -81,7 +81,7 @@ class WeWorkIP(_PluginBase):
     # 刷新cookie间隔时间,默认5分钟,太久会导致cookie失效
     _refresh_cron = "*/5 * * * *"
     # 状态通知时间 
-    _status_cron = "* */1 * * *"
+    _status_cron = "0 * * * *"
     #检测IP时间
     _check_cron = "*/11 * * * *"
     _enabled = False
@@ -133,7 +133,7 @@ class WeWorkIP(_PluginBase):
         if self._schedule_login == None:
             self._schedule_login = False
         if self._status_cron == None:
-            self._status_cron = "* */1 * * *"
+            self._status_cron = "0 * * * *"
         if self._check_cron == None:
            self._check_cron = "*/11 * * * *"
         # 停止现有任务
@@ -755,7 +755,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "model": "status_cron",
                                             "label": "Cookie失效通知周期 仅在关闭自动登录时生效",
-                                            "placeholder": "* */1 * * *",
+                                            "placeholder": "0 * * * *",
                                         },
                                     }
                                 ],
@@ -981,7 +981,7 @@ class WeWorkIP(_PluginBase):
             "wechatUrl": "",
             "qr_send_users":"",
             "schedule_login": False,
-            "status_cron" : "* */1 * * *"
+            "status_cron" : "0 * * * *"
         }
 
     def get_page(self) -> List[dict]:
