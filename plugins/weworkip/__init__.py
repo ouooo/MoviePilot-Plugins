@@ -21,7 +21,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
-
 class WeWorkIP(_PluginBase):
     # 插件名称
     plugin_name = "企微配置IP"
@@ -30,7 +29,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.3"
+    plugin_version = "2.4"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -46,6 +45,8 @@ class WeWorkIP(_PluginBase):
     script_dir = os.path.dirname(script_path)
     qr_path = 'QR.png'
     qr_path = os.path.join(script_dir, qr_path)
+    if os.path.exists(qr_path):
+        os.remove(qr_path)
     # 匹配ip地址的正则
     _ip_pattern = r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
     # 获取ip地址的网址列表
@@ -77,16 +78,20 @@ class WeWorkIP(_PluginBase):
     _cookie_valid = False
     # IP更改成功状态,防止检测IP改动但cookie失效的时候_current_ip_address已经更新成新IP导致后面刷新cookie也没有更改企微IP
     _ip_changed = False
-    # 检测间隔时间,默认5分钟,太久会导致cookie失效
+    # 刷新cookie间隔时间,默认5分钟,太久会导致cookie失效
     _refresh_cron = "*/5 * * * *"
-    # 登录循环时间 
-    _login_cron = "*/2 * * * *"
-    _cron = "*/11 * * * *"
+    # 状态通知时间 
+    _status_cron = "* */1 * * *"
+    #检测IP时间
+    _check_cron = "*/11 * * * *"
     _enabled = False
     _onlyonce = False
-    _built_in_login = True
     _cookiecloud = CookieCloudHelper()
-
+    _code = 0
+    _pattern = r"^#\d{6}$"
+    #cookie失效后定时唤起登录  如果关闭则手动调用登录
+    _schedule_login = False
+    _driver = None
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
 
@@ -100,11 +105,11 @@ class WeWorkIP(_PluginBase):
         self._use_cookiecloud = True
         self._cookie_valid = False
         self._ip_changed = True
-        self._built_in_login = True
         self._urls = []
         if config:
             self._enabled = config.get("enabled")
-            self._cron = config.get("cron")
+            self._check_cron = config.get("cron")
+            self._status_cron = config.get("status_cron")
             self._onlyonce = config.get("onlyonce")
             self._wechatUrl = config.get("wechatUrl")
             self._cookie_header = config.get("cookie_header")
@@ -113,20 +118,24 @@ class WeWorkIP(_PluginBase):
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
+            self._schedule_login = config.get("schedule_login")
             self._cookie_valid = config.get("cookie_valid")
             self._ip_changed = config.get("ip_changed")
-            self._built_in_login = config.get("built_in_login")
         self._urls = self._wechatUrl.split(",")
         if self._ip_changed == None:
             self._ip_changed = True
-        if self._built_in_login == None:
-            self._built_in_login = True
         if self._cookie_valid == None:
             self._cookie_valid = False
         if self._use_cookiecloud == None:
             self._use_cookiecloud = True
         if self._overwrite == None:
             self._overwrite = True
+        if self._schedule_login == None:
+            self._schedule_login = False
+        if self._status_cron == None:
+            self._status_cron = "* */1 * * *"
+        if self._check_cron == None:
+           self._check_cron = "*/11 * * * *"
         # 停止现有任务
         self.stop_service()
 
@@ -147,23 +156,36 @@ class WeWorkIP(_PluginBase):
                 self._onlyonce = False
 
             if not self._cookie_valid:
-                if self._built_in_login:
                     self._scheduler.add_job(
-                        func=self.login,
+                        func=self.refresh_cookie,
                         trigger="date",
                         run_date=datetime.now(tz=pytz.timezone(settings.TZ))
                         + timedelta(seconds=1),
-                        name="插件初始化检测到缓存失效,唤起一次登录"
+                        name="插件初始化检测到缓存失效"
                     )
-                else:
-                    self.create_refresh_job()
             else:
                 self.create_refresh_job()
+                
+            if not self._schedule_login:
+                self._scheduler.add_job(
+                            func=self.send_cookie_status,
+                            trigger=CronTrigger.from_crontab(self._status_cron),
+                            name="cookie失效通知",
+                            id="send_status"
+                        )
+                if not self._cookie_valid:
+                    self._scheduler.add_job(
+                    func=self.send_cookie_status,
+                    trigger="date",
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ))
+                    + timedelta(seconds=3),
+                    name="初始化检测失效通知",
+                )
+            
             # 启动任务
             if self._scheduler.get_jobs():
                 self._scheduler.print_jobs()
                 self._scheduler.start()
-        #self.refresh_cookie()
         self.__update_config()
 
     @eventmanager.register(EventType.PluginAction)
@@ -197,7 +219,7 @@ class WeWorkIP(_PluginBase):
         
     def CheckIP(self):
         if not self._cookie_valid:
-            logger.error("请求企微失败,cookie可能过期,跳过IP检测")
+            logger.error("cookie以过期,跳过IP检测")
             return False
         if not self._ip_changed:  # 上次IP变更没有改动到企微 再次请求该IP
             return True
@@ -304,7 +326,7 @@ class WeWorkIP(_PluginBase):
         self.__update_config()
         driver.quit()
 
-    def refresh_cookie(self):
+    def refresh_cookie(self,_login=True):
         logger.info("开始刷新企业微信缓存")
         if not self.check_connect():
             logger.error("网络连接失败,跳过本次缓存保活")
@@ -324,11 +346,14 @@ class WeWorkIP(_PluginBase):
                     logger.error('cookie为空,请检查CC配置和插件手动填写项')
                     driver.quit()
                     self._cookie_valid = False
-                    if self._built_in_login:
+                    if self._schedule_login:
                         if self._scheduler.get_job("refresh_cookie"):
                             self._scheduler.remove_job("refresh_cookie")
-                        if not self._scheduler.get_job("wwlogin"):
+                        if not self._scheduler.get_job("wwlogin") and _login:
                             self.create_login_job()
+                    else:
+                        if not self._scheduler.get_job("refresh_cookie"):
+                            self.create_refresh_job()
                     return
             for cookie in cookies:
                 name, value = cookie.split("=")
@@ -343,11 +368,14 @@ class WeWorkIP(_PluginBase):
             except Exception as e:
                 logger.error("cookie失效,请重新获取")
                 self._cookie_valid = False
-                if self._built_in_login:
+                if self._schedule_login:
                     if self._scheduler.get_job("refresh_cookie"):
                         self._scheduler.remove_job("refresh_cookie")
-                    if not self._scheduler.get_job("wwlogin"):
+                    if not self._scheduler.get_job("wwlogin") and _login:
                         self.create_login_job()
+                else:
+                    if not self._scheduler.get_job("refresh_cookie"):
+                        self.create_refresh_job()
             driver.quit()
             self.__update_config()
         except Exception as e:
@@ -389,8 +417,9 @@ class WeWorkIP(_PluginBase):
 
     def login(self):
         logger.info("开始登录企业微信")
+        self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "开始登录企业微信",userid=self._qr_send_users)
         logger.info("进行一次缓存检测")
-        self.refresh_cookie()
+        self.refresh_cookie(_login = False)
         if self._cookie_valid:
             logger.info("已使用其他有效缓存,跳过登录")
             if not self._scheduler.get_job("refresh_cookie"):
@@ -402,6 +431,7 @@ class WeWorkIP(_PluginBase):
             options = webdriver.EdgeOptions()
             options.add_argument("--headless=old")
             driver = webdriver.Edge(options=options)
+            self._driver = driver
             try:
                 driver.get(self._urls[0])
                 iframe_element = WebDriverWait(driver, 10).until(
@@ -426,6 +456,32 @@ class WeWorkIP(_PluginBase):
                 current_url = driver.current_url
                 try:
                     WebDriverWait(driver, 90).until(EC.url_changes(current_url))
+                    if 'mobile_confirm' in driver.current_url:
+                        driver.switch_to.default_content()
+                        #检测到验证页面  进入验证码流
+                        self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "检测到登录验证，请以 #123456 的格式回复验证码，两分钟后超时",userid=self._qr_send_users)
+                        logger.info("检测到登录验证，进入验证流程")
+                        _wait_time = 0
+                        while 'mobile_confirm' in driver.current_url:
+                            self._code = 0
+                            while self._code == 0:
+                                time.sleep(2)
+                                _wait_time += 2
+                                if _wait_time > 120:
+                                    raise ValueError("验证超时,终止本次登录")
+                            input_element = WebDriverWait(driver, 10).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, "input.inner_input"))
+                            )
+                            input_element.send_keys(self._code)
+                            WebDriverWait(driver, 10).until(
+                                lambda driver: 
+                                    # 检查登录失败提示是否显示
+                                    driver.find_elements(By.XPATH, "//div[contains(@class, 't-is-error') and contains(text(), '验证码错误')]") or
+                                    'mobile_confirm' not in driver.current_url
+                            )
+                            if 'mobile_confirm' in driver.current_url:
+                                self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "登录失败,请检查验证码并重新发送",userid=self._qr_send_users)
+                                logger.info("登录失败,请检查验证码并重新发送")
                     cookies = driver.get_cookies()
                     self._cookie_from_CC = [f"{cookie['name']}={cookie['value']}" for cookie in cookies]
                     self._cookie_valid = True
@@ -437,17 +493,18 @@ class WeWorkIP(_PluginBase):
                         self._scheduler.remove_job("wwlogin")
                 except Exception as e:
                     logger.error(f"登录超时:{e}")
-                    self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "二维码失效",text = "请等待扫描下一个二维码,间隔大约一分钟",userid=self._qr_send_users)
-                    self._cookie_valid = False
+                    self.login_fail()
             except Exception as e:
                 logger.error(f"登录失败:{e}")
-                self._cookie_valid = False
+                self.login_fail()
             driver.quit()
+            self._driver = None
             self.__update_config()
             if os.path.exists(self.qr_path):
                 os.remove(self.qr_path)
         except Exception as e:
-                logger.error(f"登录失败:{e}")
+            logger.error(f"登录失败:{e}")
+            self.login_fail()
     
     def create_refresh_job(self):
         logger.info("创建定时刷新企业微信缓存任务")
@@ -463,18 +520,28 @@ class WeWorkIP(_PluginBase):
                 self.systemmessage.put(f"定时刷新企业微信缓存任务配置错误：{err}")
         
     def create_login_job(self):
-        logger.info("创建定时唤起企业微信登录任务")
+        logger.info("唤起企业微信登录任务")
         try:
                 self._scheduler.add_job(
                     func=self.login,
-                    trigger=CronTrigger.from_crontab(self._login_cron),
-                    name="定时唤起企业微信登录",
-                    id="wwlogin"
+                    trigger="date",
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ))
+                    + timedelta(seconds=5),
+                    name="唤起企业微信登录"
+                    #id="wwlogin"
                 )
         except Exception as err:
-                logger.error(f"定时唤起企业登录任务配置错误：{err}")
-                self.systemmessage.put(f"定时唤起企业登录配置错误：{err}")
-                
+                logger.error(f"唤起企业登录任务配置错误：{err}")
+                self.systemmessage.put(f"唤起企业登录配置错误：{err}")
+
+    def login_fail(self):
+        self._cookie_valid = False
+        if self._schedule_login:
+            self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "登录失败",text = "已开启自动登录，即将开始下一轮登录。",userid=self._qr_send_users)
+            self.create_login_job()
+        else:
+            self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "登录失败",text = "如需再次登录，请回复\n#登录企业微信",userid=self._qr_send_users)    
+
     def check_connect(self):
         try:
             response = requests.get(self._urls[0], timeout=10)
@@ -494,7 +561,7 @@ class WeWorkIP(_PluginBase):
             {
                 "enabled": self._enabled,
                 "onlyonce": self._onlyonce,
-                "cron": self._cron,
+                "cron": self._check_cron,
                 "wechatUrl": self._wechatUrl,
                 "cookie_header": self._cookie_header,
                 "qr_send_users": self._qr_send_users,
@@ -504,9 +571,35 @@ class WeWorkIP(_PluginBase):
                 "use_cookiecloud": self._use_cookiecloud,
                 "cookie_valid": self._cookie_valid,
                 "ip_changed": self._ip_changed,
-                "built_in_login": self._built_in_login,
+                "schedule_login": self._schedule_login,
+                "status_cron":self._status_cron
             }
         )
+
+    @eventmanager.register(EventType.UserMessage)
+    def receive_message(self, event: Event):
+        if not self._enabled:
+            return
+        text = event.event_data.get("text")
+        if re.match(self._pattern, text):
+            self._code = text[1:]
+            logger.info(f"从MP应用收到验证码：{self._code}")
+            return
+        if text == "#登录企业微信":
+            if self._cookie_valid:
+                self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "缓存有效，无需登录",userid=self._qr_send_users)
+                return
+            self._scheduler.add_job(
+                    func=self.login,
+                    trigger="date",
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ))
+                    + timedelta(seconds=3),
+                    name="登录企业微信",
+                )
+    
+    def send_cookie_status(self):
+        if not self._cookie_valid:
+            self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "企业微信Cookie失效",text = "回复下述指令唤起一次登录\n#登录企业微信",userid=self._qr_send_users)
 
     def get_state(self) -> bool:
         return self._enabled
@@ -538,12 +631,12 @@ class WeWorkIP(_PluginBase):
             "kwargs": {} # 定时器参数
         }]
         """
-        if self._enabled and self._cron:
+        if self._enabled and self._check_cron:
             return [
                 {
                     "id": "WeWorkIP",
                     "name": "微信应用自动配置动态公网IP",
-                    "trigger": CronTrigger.from_crontab(self._cron),
+                    "trigger": CronTrigger.from_crontab(self._check_cron),
                     "func": self.check,
                     "kwargs": {},
                 }
@@ -585,7 +678,7 @@ class WeWorkIP(_PluginBase):
                                         "component": "VSwitch",
                                         "props": {
                                             "model": "onlyonce",
-                                            "label": "立即检测一次",
+                                            "label": "立即检测一次IP",
                                         },
                                     }
                                 ],
@@ -623,8 +716,8 @@ class WeWorkIP(_PluginBase):
                                     {
                                         "component": "VSwitch",
                                         "props": {
-                                            "model": "built_in_login",
-                                            "label": "内置浏览器登录企业微信",
+                                            "model": "schedule_login",
+                                            "label": "自动登录",
                                         },
                                     }
                                 ],
@@ -642,8 +735,27 @@ class WeWorkIP(_PluginBase):
                                         "component": "VTextField",
                                         "props": {
                                             "model": "cron",
-                                            "label": "检测周期",
-                                            "placeholder": "0 * * * *",
+                                            "label": "检测IP周期",
+                                            "placeholder": "*/11 * * * *",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "status_cron",
+                                            "label": "Cookie失效通知周期 仅在关闭自动登录时生效",
+                                            "placeholder": "* */1 * * *",
                                         },
                                     }
                                 ],
@@ -724,7 +836,28 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "开启CC和内置登录后,会在插件状态页和企业微信MP应用显示二维码,扫码登录即可正常使用。CC非必须开启，当其他地方登录企业微信时，使用CC获取的Cookie可以避免内置登录顶掉其他地方的登录",
+                                            "text": "默认关闭自动登录，发送 #登录企业微信 至MP应用则可以唤起一次登录操作。如果需要验证手机，把验证码按照格式 #123456 发送到MP应用。",
+                                        },
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
+                                },
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "若开启自动登录，Cookie失效后会自动循环登录流程。若未及时登录会导致MP应用聊天框被塞满二维码。",
                                         },
                                     }
                                 ],
@@ -745,7 +878,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "如果微信识别登录提示跳转企业微信,跳转后也识别不了,也许是账号风控了,可以转移企业微信给自己小号就能识别扫码登录",
+                                            "text": "默认开启CookieCloud，会优先从CC同步cookie使用，建议开启。",
                                         },
                                     }
                                 ],
@@ -766,7 +899,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "如果在保存配置的时候转圈很久，是因为在等待后台登录任务停止，登录任务最长一分钟，可直接点插件外的区域退出界面，不会影响插件运行",
+                                            "text": "覆盖模式: 开启后新IP会直接覆写到已填写的IP列表，关闭则把新IP添加到已有列表里。",
                                         },
                                     }
                                 ],
@@ -787,7 +920,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "登录流程，推荐先看一次:https://github.com/suraxiuxiu/MoviePilot-Plugins",
+                                            "text": "检测IP周期：获取动态公网IP的间隔，推荐几分钟检测一次，有新IP才会请求企业微信管理更改。",
                                         },
                                     }
                                 ],
@@ -808,7 +941,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "覆盖模式: 开启后新IP会直接覆写到已填写的IP列表,关闭则把新IP添加到已有列表里",
+                                            "text": "微信通知代理地址记得改回官方地址https://qyapi.weixin.qq.com/并重启MP。",
                                         },
                                     }
                                 ],
@@ -829,34 +962,13 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "检测周期：获取动态公网IP的间隔,推荐几分钟检测一次,有新IP才会请求企业微信管理更改",
+                                            "text": "具体介绍和其他问题在项目主页，推荐先看一次:https://github.com/suraxiuxiu/MoviePilot-Plugins",
                                         },
                                     }
                                 ],
                             }
                         ],
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {
-                                    "cols": 12,
-                                },
-                                "content": [
-                                    {
-                                        "component": "VAlert",
-                                        "props": {
-                                            "type": "info",
-                                            "variant": "tonal",
-                                            "text": "微信通知代理地址记得改回https://qyapi.weixin.qq.com/并重启MP",
-                                        },
-                                    }
-                                ],
-                            }
-                        ],
-                    },
+                    }
                 ],
             }
         ], {
@@ -867,8 +979,9 @@ class WeWorkIP(_PluginBase):
             "onlyonce": False,
             "cookie_header": "",
             "wechatUrl": "",
-            "built_in_login": True,
-            "qr_send_users":""
+            "qr_send_users":"",
+            "schedule_login": False,
+            "status_cron" : "* */1 * * *"
         }
 
     def get_page(self) -> List[dict]:
@@ -924,7 +1037,7 @@ class WeWorkIP(_PluginBase):
                                                 "props": {
                                                     "type": "info",
                                                     "variant": "tonal",
-                                                    "text": "展示缓存状态,如果开启内置登录,则会在缓存失效时展示登录二维码",
+                                                    "text": "展示缓存状态。缓存失效后，在登录期间会展示登录二维码。",
                                                 },
                                             }
                                         ],
@@ -945,7 +1058,7 @@ class WeWorkIP(_PluginBase):
                                                 "props": {
                                                     "type": "info",
                                                     "variant": "tonal",
-                                                    "text": "登录二维码也会发送到企业微信MP应用上,可直接长按识别登录,此处二维码做备用登录",
+                                                    "text": "登录二维码也会发送到企业微信MP应用上，点开图片后可长按识别登录，此处二维码做备用登录。",
                                                 },
                                             }
                                         ],
@@ -966,7 +1079,7 @@ class WeWorkIP(_PluginBase):
                                                 "props": {
                                                     "type": "info",
                                                     "variant": "tonal",
-                                                    "text": "二维码过期和再次刷新有一分钟左右的刷新间隔,如果不显示二维码,关闭界面等一会再进即可",
+                                                    "text": "二维码获取会有间隔，如果不显示二维码，关闭窗口等一会再进即可。",
                                                 },
                                             }
                                         ],
@@ -989,7 +1102,7 @@ class WeWorkIP(_PluginBase):
                 img_src = f"data:image/png;base64,{base64_image}"
         
         # 如果开启了内置登录，插入二维码的组件
-        if self._built_in_login and not self._cookie_valid:
+        if not self._cookie_valid:
             base_content[1:1] = [ 
                                     {
                                         "component": "div",
@@ -1020,10 +1133,12 @@ class WeWorkIP(_PluginBase):
         退出插件
         """
         try:
+            if self._driver:
+                self._driver.quit()
             if self._scheduler:
-                self._scheduler.remove_all_jobs()
                 if self._scheduler.running:
-                    self._scheduler.shutdown()
+                    self._scheduler.shutdown()                 
+                    self._scheduler.remove_all_jobs()
                 self._scheduler = None
         except Exception as e:
             logger.error("退出插件失败：%s" % str(e))
