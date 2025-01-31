@@ -26,7 +26,7 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.4.1"
+    plugin_version = "2.4.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -299,8 +299,7 @@ class WeWorkIPPW(_PluginBase):
                 self._ip_changed = True
                 browser.close() 
         except Exception as e:
-                logger.error(f"更改可信IP失败:{e}") 
-                self._cookie_valid = False    
+            logger.error(f"更改可信IP失败:{e}")
     
     def refresh_cookie(self,_login=True):
         logger.info("开始刷新企业微信缓存")
@@ -349,7 +348,10 @@ class WeWorkIPPW(_PluginBase):
             self.__update_config()
         except Exception as e:
                 logger.error(f"cookie校验失败:{e}") 
-                self._cookie_valid = False
+                if "Timeout" in str(e):
+                    logger.info("检测可能连接超时,跳过本次刷新") 
+                else:
+                    self._cookie_valid = False
                 self.__update_config()   
     
     def parse_cookie_header(self,cookie_header):

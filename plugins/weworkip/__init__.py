@@ -20,6 +20,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 
 class WeWorkIP(_PluginBase):
     # 插件名称
@@ -29,7 +30,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.4.1"
+    plugin_version = "2.4.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -382,6 +383,8 @@ class WeWorkIP(_PluginBase):
             logger.error(f"cookie校验失败:{e}")
             if "session not created" in str(e):
                 logger.info("浏览器启动失败,跳过本次刷新")
+            elif isinstance(e, TimeoutException) or "Timeout" in str(e):
+                logger.info("检测可能连接超时,跳过本次刷新") 
             else:
                 self._cookie_valid = False
             self.__update_config()
