@@ -30,7 +30,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.4.2"
+    plugin_version = "2.4.3"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -72,7 +72,8 @@ class WeWorkIP(_PluginBase):
     _qr_send_users = ""
     # 覆盖已填写的IP,设置FALSE则添加新IP到已有IP列表里
     _overwrite = True
-
+    # 使用旧无头模式
+    _use_old_headless = False
     # 使用CookieCloud开关
     _use_cookiecloud = True
     # cookie有效检测
@@ -103,6 +104,7 @@ class WeWorkIP(_PluginBase):
         self._qr_send_users = ""
         self._cookie_from_CC = ""
         self._overwrite = True
+        self._use_old_headless = False
         self._use_cookiecloud = True
         self._cookie_valid = False
         self._ip_changed = True
@@ -117,6 +119,7 @@ class WeWorkIP(_PluginBase):
             self._qr_send_users = config.get("qr_send_users")
             self._cookie_from_CC = config.get("cookie_from_CC")
             self._overwrite = config.get("overwrite")
+            self._use_old_headless = config.get("use_old_headless")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
             self._schedule_login = config.get("schedule_login")
@@ -131,6 +134,8 @@ class WeWorkIP(_PluginBase):
             self._use_cookiecloud = True
         if self._overwrite == None:
             self._overwrite = True
+        if self._use_old_headless == None:
+            self._use_old_headless = False
         if self._schedule_login == None:
             self._schedule_login = False
         if self._status_cron == None:
@@ -267,7 +272,10 @@ class WeWorkIP(_PluginBase):
         if not self.check_connect():
             logger.error("网络连接失败,跳过本次缓存保活")
         options = webdriver.EdgeOptions()
-        options.add_argument("--headless=old")
+        if(self._use_old_headless):
+            options.add_argument("--headless=old")
+        else:
+            options.add_argument("--headless")
         driver = webdriver.Edge(options=options)
         time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
         driver.get(self._urls[0])
@@ -334,7 +342,10 @@ class WeWorkIP(_PluginBase):
             return
         try:
             options = webdriver.EdgeOptions()
-            options.add_argument("--headless=old")
+            if(self._use_old_headless):
+                options.add_argument("--headless=old")
+            else:
+                options.add_argument("--headless")
             driver = webdriver.Edge(options=options)
             time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
             driver.get(self._urls[0])
@@ -432,7 +443,10 @@ class WeWorkIP(_PluginBase):
             return
         try:
             options = webdriver.EdgeOptions()
-            options.add_argument("--headless=old")
+            if(self._use_old_headless):
+                options.add_argument("--headless=old")
+            else:
+                options.add_argument("--headless")
             driver = webdriver.Edge(options=options)
             self._driver = driver
             try:
@@ -570,6 +584,7 @@ class WeWorkIP(_PluginBase):
                 "qr_send_users": self._qr_send_users,
                 "cookie_from_CC": self._cookie_from_CC,
                 "overwrite": self._overwrite,
+                "use_old_headless": self._use_old_headless,
                 "current_ip_address": self._current_ip_address,
                 "use_cookiecloud": self._use_cookiecloud,
                 "cookie_valid": self._cookie_valid,
@@ -721,6 +736,19 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "model": "schedule_login",
                                             "label": "自动登录",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "use_old_headless",
+                                            "label": "使用旧无头模式",
                                         },
                                     }
                                 ],
@@ -944,6 +972,27 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
+                                            "text": "旧无头模式：正常运行无需开启。如果出现无法启动浏览器，或者每次刷新缓存时桌面会出现白框，可尝试打开此开关。",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
+                                },
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
                                             "text": "微信通知代理地址记得改回官方地址https://qyapi.weixin.qq.com/并重启MP。",
                                         },
                                     }
@@ -978,6 +1027,7 @@ class WeWorkIP(_PluginBase):
             "enabled": False,
             "cron": "",
             "overwrite": False,
+            "use_old_headless": False,
             "use_cookiecloud": True,
             "onlyonce": False,
             "cookie_header": "",
