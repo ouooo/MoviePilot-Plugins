@@ -3,11 +3,12 @@
         "name": "企微配置IP",
         "description": "!!docker用户请使用PW版!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用selenium运行的版本,适合Windows用户使用",
         "labels": "消息通知",
-        "version": "2.4.3",
+        "version": "2.4.4",
         "icon": "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true",
         "author": "suraxiuxiu",
         "level": 2,
         "history": {
+            "v2.4.4": "优化后台进程管理",
             "v2.4.3": "添加无头模式切换",
             "v2.4.2": "修改网络超时判断机制",
             "v2.4.1": "修改默认通知间隔",

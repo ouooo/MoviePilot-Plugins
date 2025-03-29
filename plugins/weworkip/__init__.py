@@ -30,7 +30,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.4.3"
+    plugin_version = "2.4.4"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -399,6 +399,9 @@ class WeWorkIP(_PluginBase):
             else:
                 self._cookie_valid = False
             self.__update_config()
+        finally:
+            if 'driver' in locals():
+                driver.quit()
 
     def get_cookie(self):
         cookie_header = ""
@@ -522,6 +525,9 @@ class WeWorkIP(_PluginBase):
         except Exception as e:
             logger.error(f"登录失败:{e}")
             self.login_fail()
+        finally:
+            if 'driver' in locals():
+                driver.quit()
     
     def create_refresh_job(self):
         logger.info("创建定时刷新企业微信缓存任务")
