@@ -30,7 +30,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.4.4"
+    plugin_version = "2.5"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -74,6 +74,8 @@ class WeWorkIP(_PluginBase):
     _overwrite = True
     # 使用旧无头模式
     _use_old_headless = False
+     # 浏览器类型
+    _browser = "edge"
     # 使用CookieCloud开关
     _use_cookiecloud = True
     # cookie有效检测
@@ -109,6 +111,7 @@ class WeWorkIP(_PluginBase):
         self._cookie_valid = False
         self._ip_changed = True
         self._urls = []
+        self._browser = "edge"
         if config:
             self._enabled = config.get("enabled")
             self._check_cron = config.get("cron")
@@ -125,6 +128,7 @@ class WeWorkIP(_PluginBase):
             self._schedule_login = config.get("schedule_login")
             self._cookie_valid = config.get("cookie_valid")
             self._ip_changed = config.get("ip_changed")
+            self._browser = config.get("browser")
         self._urls = self._wechatUrl.split(",")
         if self._ip_changed == None:
             self._ip_changed = True
@@ -142,6 +146,8 @@ class WeWorkIP(_PluginBase):
             self._status_cron = "0 * * * *"
         if self._check_cron == None:
            self._check_cron = "*/11 * * * *"
+        if self._browser == None:
+            self._browser = "edge"
         # 停止现有任务
         self.stop_service()
 
@@ -271,12 +277,18 @@ class WeWorkIP(_PluginBase):
         logger.info("开始请求企业微信管理更改可信IP")
         if not self.check_connect():
             logger.error("网络连接失败,跳过本次缓存保活")
-        options = webdriver.EdgeOptions()
+        if self._browser == "edge":
+            options = webdriver.EdgeOptions()
+        else:
+            options = webdriver.ChromeOptions()
         if(self._use_old_headless):
             options.add_argument("--headless=old")
         else:
             options.add_argument("--headless")
-        driver = webdriver.Edge(options=options)
+        if self._browser == "edge":
+            driver = webdriver.Edge(options=options)
+        else:
+            driver = webdriver.Chrome(options=options)
         time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
         driver.get(self._urls[0])
         time.sleep(1)
@@ -341,12 +353,18 @@ class WeWorkIP(_PluginBase):
             logger.error("网络连接失败,跳过本次缓存保活")
             return
         try:
-            options = webdriver.EdgeOptions()
+            if self._browser == "edge":
+                options = webdriver.EdgeOptions()
+            else:
+                options = webdriver.ChromeOptions()
             if(self._use_old_headless):
                 options.add_argument("--headless=old")
             else:
                 options.add_argument("--headless")
-            driver = webdriver.Edge(options=options)
+            if self._browser == "edge":
+                driver = webdriver.Edge(options=options)
+            else:
+                driver = webdriver.Chrome(options=options)
             time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
             driver.get(self._urls[0])
             WebDriverWait(driver, 10).until(
@@ -445,12 +463,18 @@ class WeWorkIP(_PluginBase):
                 self._scheduler.remove_job("wwlogin")
             return
         try:
-            options = webdriver.EdgeOptions()
+            if self._browser == "edge":
+                options = webdriver.EdgeOptions()
+            else:
+                options = webdriver.ChromeOptions()
             if(self._use_old_headless):
                 options.add_argument("--headless=old")
             else:
                 options.add_argument("--headless")
-            driver = webdriver.Edge(options=options)
+            if self._browser == "edge":
+                driver = webdriver.Edge(options=options)
+            else:
+                driver = webdriver.Chrome(options=options)
             self._driver = driver
             try:
                 driver.get(self._urls[0])
@@ -596,7 +620,8 @@ class WeWorkIP(_PluginBase):
                 "cookie_valid": self._cookie_valid,
                 "ip_changed": self._ip_changed,
                 "schedule_login": self._schedule_login,
-                "status_cron":self._status_cron
+                "status_cron":self._status_cron,
+                "browser":self._browser
             }
         )
 
@@ -745,6 +770,26 @@ class WeWorkIP(_PluginBase):
                                         },
                                     }
                                 ],
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 3
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'browser',
+                                            'label': '选择浏览器',
+                                            'items': [
+                                                {'title': 'Edge', 'value': 'edge'},
+                                                {'title': 'Chrome', 'value': 'chrome'}
+                                            ]
+                                        }
+                                    }
+                                ]
                             },
                             {
                                 "component": "VCol",
@@ -978,7 +1023,7 @@ class WeWorkIP(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "旧无头模式：正常运行无需开启。如果出现无法启动浏览器，或者每次刷新缓存时桌面会出现白框，可尝试打开此开关。",
+                                            "text": "旧无头模式和浏览器选择：正常运行无需设置。如果出现无法启动浏览器，或者每次刷新缓存时桌面会出现白框，可尝试切换无头模式和浏览器。",
                                         },
                                     }
                                 ],
@@ -1040,7 +1085,8 @@ class WeWorkIP(_PluginBase):
             "wechatUrl": "",
             "qr_send_users":"",
             "schedule_login": False,
-            "status_cron" : "0 * * * *"
+            "status_cron" : "0 * * * *",
+            "browser":"edge"
         }
 
     def get_page(self) -> List[dict]:
