@@ -24,13 +24,13 @@ class WeWorkIPPW(_PluginBase):
     # 插件描述
     plugin_desc = "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
     # 插件图标
-    plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
+    plugin_icon = "https://github.com/ouooo/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
     plugin_version = "2.4.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
-    author_url = "https://github.com/suraxiuxiu/MoviePilot-Plugins"
+    author_url = "https://github.com/ouooo/MoviePilot-Plugins"
     # 插件配置项ID前缀
     plugin_config_prefix = "weworkippw_"
     # 加载顺序
@@ -47,7 +47,7 @@ class WeWorkIPPW(_PluginBase):
     #匹配ip地址的正则
     _ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     #获取ip地址的网址列表
-    _ip_urls = ["https://v6.ident.me", "https://6.ipw.cn", "https://myip.ipip.net", "https://ddns.oray.com/checkip", "https://ip.3322.net","https://4.ipw.cn"]
+    _ip_urls = [""https://6.ipw.cn", "https://myip.ipip.net", https://v6.ident.me", "https://ddns.oray.com/checkip", "https://ip.3322.net","https://4.ipw.cn"]
     #当前ip地址
     _current_ip_address = '192.168.1.1'
     #企业微信应用管理地址
