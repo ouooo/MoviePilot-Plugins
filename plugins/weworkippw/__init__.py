@@ -47,7 +47,7 @@ class WeWorkIPPW(_PluginBase):
     #匹配ip地址的正则
     _ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     #获取ip地址的网址列表
-    _ip_urls = ["https://myip.ipip.net", "https://ddns.oray.com/checkip", "https://ip.3322.net","https://4.ipw.cn"]
+    _ip_urls = ["https://myip.ipip.net", "https://ddns.oray.com/checkip", "https://ip.3322.net","https://4.ipw.cn","https://v6.ident.me","https://6.ipw.cn"]
     #当前ip地址
     _current_ip_address = '192.168.1.1'
     #企业微信应用管理地址
