@@ -20,7 +20,7 @@ from playwright.sync_api import sync_playwright
 
 class WeWorkIPPW(_PluginBase):
     # 插件名称
-    plugin_name = "企微配置IPpw版"
+    plugin_name = "企微可信动态IPv6版"
     # 插件描述
     plugin_desc = "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
     # 插件图标
